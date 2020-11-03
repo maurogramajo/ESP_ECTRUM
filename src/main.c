@@ -18,6 +18,9 @@
 
 #include "driver/timer.h"
 #include "driver/adc.h"
+#include <math.h>
+#include "esp_dsp.h"
+
 
 #define CORE0   0
 #define CORE1   1
@@ -101,19 +104,19 @@ void tMuestreo(void * a) {
     } else {
         printf("eFuse Vref: NOT supported\n");
     }
-#elif CONFIG_IDF_TARGET_ESP32S2
-    if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK) {
-        printf("eFuse Two Point: Supported\n");
-    } else {
-        printf("Cannot retrieve eFuse Two Point calibration values. Default calibration values will be used.\n");
-    }
-#else
-#error "This example is configured for ESP32/ESP32S2."
-#endif
+    #elif CONFIG_IDF_TARGET_ESP32S2
+        if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK) {
+            printf("eFuse Two Point: Supported\n");
+        } else {
+            printf("Cannot retrieve eFuse Two Point calibration values. Default calibration values will be used.\n");
+        }
+    #else
+    #error "This example is configured for ESP32/ESP32S2."
+    #endif
 
-adc1_config_width(ADC_WIDTH);
-adc1_config_channel_atten(ADC_CANAL, ADC_ATT);
-//Characterize ADC
+    adc1_config_width(ADC_WIDTH);
+    adc1_config_channel_atten(ADC_CANAL, ADC_ATT);
+    //Characterize ADC
     adc_chars = calloc(1, sizeof(esp_adc_cal_characteristics_t));
     esp_adc_cal_value_t val_type = esp_adc_cal_characterize(ADC_UNIT, ADC_ATT, ADC_WIDTH, V_REF, adc_chars);
     if (val_type == ESP_ADC_CAL_VAL_EFUSE_TP) {
@@ -147,15 +150,64 @@ adc1_config_channel_atten(ADC_CANAL, ADC_ATT);
 }
 
 void tFFT(void *a){
-    int promedio = 0;
+    // This example shows how to use FFT from esp-dsp library
+    float senial[NUM_MUESTRAS];
+    // Window coefficients
+    float wind[NUM_MUESTRAS];
+    // working complex array
+    float y_cf[NUM_MUESTRAS*2];
+    // Pointers to result arrays
+    float* y1_cf = &y_cf[0];
+    //float* y2_cf = &y_cf[NUM_MUESTRAS];
+    printf("wertwertwert\n");
+
+    dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
+    // Generate hann window
+    dsps_wind_hann_f32(wind, NUM_MUESTRAS);
+    printf("asdfasdf\n");
+
     while (1)
     {
         if(xSemaphoreTake(semBin_fft, portMAX_DELAY) == pdTRUE){
-            for(int i = 0; i < NUM_MUESTRAS; i++){
-                promedio += muestras[i];
+            printf("asdfasdf\n");
+            //TRANSFORMO LAS MUESTRAS EN UNA senial
+            for (int i = 0; i < NUM_MUESTRAS; i++)
+            {
+                senial[i] = muestras[i] - 2048;
             }
-            promedio /= NUM_MUESTRAS;
-            printf("Promedio de las muestras: %d\n", promedio);
+            
+            
+            // Convert two input vectors to one complex vector
+            for (int i=0 ; i< NUM_MUESTRAS ; i++)
+            {
+                y_cf[i*2 + 0] = senial[i] * wind[i]; // Real part is your signal multiply with window
+                y_cf[i*2 + 1] = 0; // Imag part is 0
+            }
+            // FFT
+            dsps_fft2r_fc32(y_cf, NUM_MUESTRAS);
+            // Bit reverse 
+            dsps_bit_rev_fc32(y_cf, NUM_MUESTRAS);
+            // Convert one complex vector to two complex vectors
+            dsps_cplx2reC_fc32(y_cf, NUM_MUESTRAS);
+
+            // y1_cf - is your result in log scale
+            // y2_cf - magnitude of your signal in linear scale
+
+            for (int i = 0 ; i < NUM_MUESTRAS/2 ; i++) {
+                y1_cf[i] = 10 * log10f((y1_cf[i * 2 + 0] * y1_cf[i * 2 + 0] + y1_cf[i * 2 + 1] * y1_cf[i * 2 + 1])/NUM_MUESTRAS);
+                // y2_cf[i] = ((y1_cf[i * 2 + 0] * y1_cf[i * 2 + 0] + y1_cf[i * 2 + 1] * y1_cf[i * 2 + 1])/NUM_MUESTRAS);
+            }
+            printf("FFT\n");
+            // for (int i = 0; i < NUM_MUESTRAS/2; i++)
+            // {
+                // printf("%d ",y1_cf[i]);
+            // }
+            
+            //Show power spectrum in 64x10 window from -60 to 0 dB from 0..N/2 samples
+            dsps_view(y1_cf, NUM_MUESTRAS/2, 64, 10,  -60, 40, '|');
+            //dsps_view(y2_cf, N/2, 64, 10,  0, 2, '|');
+            printf("\n\n\n");
+            // y1_cf = &y_cf[0];
         }
     }
     
@@ -182,5 +234,5 @@ void app_main(void)
     xTaskCreatePinnedToCore(tBlinky, "Blinky", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, 0, CORE1);
     
     xTaskCreatePinnedToCore(tMuestreo, "Muestreo", 4096, NULL, tskIDLE_PRIORITY+1, NULL, CORE1);
-    xTaskCreatePinnedToCore(tFFT, "FFT", 4096, NULL, tskIDLE_PRIORITY+2, NULL, CORE1);
+    xTaskCreatePinnedToCore(tFFT, "FFT", configMINIMAL_STACK_SIZE*1000, NULL, tskIDLE_PRIORITY+2, NULL, CORE1);
 }
