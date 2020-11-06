@@ -141,7 +141,7 @@ void tMuestreo(void * a) {
             {
                 pos = 0;
                 xSemaphoreGive(semBin_fft);
-                vTaskDelay(10/portTICK_PERIOD_MS);
+                vTaskDelay(30/portTICK_PERIOD_MS);
             }
         }
     }
@@ -159,17 +159,14 @@ void tFFT(void *a){
     // Pointers to result arrays
     float* y1_cf = &y_cf[0];
     //float* y2_cf = &y_cf[NUM_MUESTRAS];
-    printf("wertwertwert\n");
 
     dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
     // Generate hann window
     dsps_wind_hann_f32(wind, NUM_MUESTRAS);
-    printf("asdfasdf\n");
 
     while (1)
     {
         if(xSemaphoreTake(semBin_fft, portMAX_DELAY) == pdTRUE){
-            printf("asdfasdf\n");
             //TRANSFORMO LAS MUESTRAS EN UNA senial
             for (int i = 0; i < NUM_MUESTRAS; i++)
             {
@@ -204,7 +201,7 @@ void tFFT(void *a){
             // }
             
             //Show power spectrum in 64x10 window from -60 to 0 dB from 0..N/2 samples
-            dsps_view(y1_cf, NUM_MUESTRAS/2, 64, 10,  -60, 40, '|');
+            //dsps_view(y1_cf, NUM_MUESTRAS/2, 64, 10,  -60, 40, '|');
             //dsps_view(y2_cf, N/2, 64, 10,  0, 2, '|');
             printf("\n\n\n");
             // y1_cf = &y_cf[0];
@@ -234,5 +231,5 @@ void app_main(void)
     xTaskCreatePinnedToCore(tBlinky, "Blinky", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, 0, CORE1);
     
     xTaskCreatePinnedToCore(tMuestreo, "Muestreo", 4096, NULL, tskIDLE_PRIORITY+1, NULL, CORE1);
-    xTaskCreatePinnedToCore(tFFT, "FFT", configMINIMAL_STACK_SIZE*1000, NULL, tskIDLE_PRIORITY+2, NULL, CORE1);
+    xTaskCreatePinnedToCore(tFFT, "FFT", configMINIMAL_STACK_SIZE*100, NULL, tskIDLE_PRIORITY+2, NULL, CORE1);
 }
