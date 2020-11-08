@@ -123,6 +123,7 @@ void tMuestreo(void * a) {
         printf("Characterized using Two Point Value\n");
     } else if (val_type == ESP_ADC_CAL_VAL_EFUSE_VREF) {
         printf("Characterized using eFuse Vref\n");
+        printf("VREF: %d", adc_chars->vref);
     } else {
         printf("Characterized using Default Vref\n");
     }
@@ -168,10 +169,14 @@ void tFFT(void *a){
     {
         if(xSemaphoreTake(semBin_fft, portMAX_DELAY) == pdTRUE){
             //TRANSFORMO LAS MUESTRAS EN UNA senial
+            //printf("\n");
             for (int i = 0; i < NUM_MUESTRAS; i++)
             {
-                senial[i] = muestras[i] - 2048;
+                //senial[i] = muestras[i];
+                senial[i] = ((int)esp_adc_cal_raw_to_voltage(muestras[i], adc_chars) - 1640);
+                //printf("%.2f ", senial[i]);
             }
+            //printf("\n\n");
             
             
             // Convert two input vectors to one complex vector
@@ -194,16 +199,16 @@ void tFFT(void *a){
                 y1_cf[i] = 10 * log10f((y1_cf[i * 2 + 0] * y1_cf[i * 2 + 0] + y1_cf[i * 2 + 1] * y1_cf[i * 2 + 1])/NUM_MUESTRAS);
                 // y2_cf[i] = ((y1_cf[i * 2 + 0] * y1_cf[i * 2 + 0] + y1_cf[i * 2 + 1] * y1_cf[i * 2 + 1])/NUM_MUESTRAS);
             }
-            printf("FFT\n");
-            // for (int i = 0; i < NUM_MUESTRAS/2; i++)
+            // printf("FFT\n");
+            // for (int i = 0; i < 32; i++)
             // {
-                // printf("%d ",y1_cf[i]);
+                // printf("%.2f ",y1_cf[i]);
             // }
-            
-            //Show power spectrum in 64x10 window from -60 to 0 dB from 0..N/2 samples
-            //dsps_view(y1_cf, NUM_MUESTRAS/2, 64, 10,  -60, 40, '|');
-            //dsps_view(y2_cf, N/2, 64, 10,  0, 2, '|');
             printf("\n\n\n");
+            //Show power spectrum in 254x15 window from 40 to 100 dB from 0..N/2 samples
+            dsps_view(y1_cf, NUM_MUESTRAS/2, 254, 15,  40, 100, '|');
+            //dsps_view(y2_cf, N/2, 64, 10,  0, 2, '|');
+             printf("\n\n\n");
             // y1_cf = &y_cf[0];
         }
     }
@@ -231,5 +236,5 @@ void app_main(void)
     xTaskCreatePinnedToCore(tBlinky, "Blinky", configMINIMAL_STACK_SIZE, NULL, tskIDLE_PRIORITY+1, 0, CORE1);
     
     xTaskCreatePinnedToCore(tMuestreo, "Muestreo", 4096, NULL, tskIDLE_PRIORITY+1, NULL, CORE1);
-    xTaskCreatePinnedToCore(tFFT, "FFT", configMINIMAL_STACK_SIZE*100, NULL, tskIDLE_PRIORITY+2, NULL, CORE1);
+    xTaskCreatePinnedToCore(tFFT, "FFT", configMINIMAL_STACK_SIZE*150, NULL, tskIDLE_PRIORITY+1, NULL, CORE1);
 }
